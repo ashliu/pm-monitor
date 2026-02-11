@@ -41,7 +41,7 @@
 
 ## 安装依赖
 
-### 使用 pip 安装
+### 完整安装（使用真实功率计）
 
 ```bash
 pip install -r requirements.txt
@@ -52,6 +52,32 @@ pip install -r requirements.txt
 ```bash
 pip install PyQt5 pyqtgraph pyvisa pyvisa-py numpy
 ```
+
+### 模拟模式安装（无需硬件）
+
+如果没有功率计硬件，可以使用 **Mock 模式** 进行测试：
+
+```bash
+pip install PyQt5 pyqtgraph numpy
+```
+
+> 注意：Mock 模式不需要 `pyvisa`，程序会自动使用内置的模拟数据生成器。
+
+---
+
+## 模拟模式使用
+
+可以在没有真实硬件的情况下测试所有功能：
+
+1. 点击 **"刷新设备列表"** 
+2. 选择 **"MOCK::PowerMeter::1 (模拟设备)"**
+3. 点击 **"连接设备"**
+4. 点击 **"开始测量"**
+
+模拟数据特点：
+- 基础功率：约 50W
+- 随机噪声、缓慢趋势变化、周期性波动
+- 与真实数据行为相似，适合测试界面和功能
 
 ### 可选：安装 NI-VISA 运行时
 

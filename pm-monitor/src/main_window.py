@@ -24,6 +24,13 @@ try:
 except ImportError:
     HAS_PYVISA = False
 
+# 导入 Mock VISA（用于测试）
+try:
+    from mock_visa import MockResourceManager, MockPyVISA
+    HAS_MOCK = True
+except ImportError:
+    HAS_MOCK = False
+
 
 class PMMonitorMainWindow(QMainWindow):
     """功率监测主窗口"""
@@ -79,19 +86,26 @@ class PMMonitorMainWindow(QMainWindow):
 
     def init_visa(self):
         """初始化 VISA"""
-        if not HAS_PYVISA:
+        self.use_mock = False
+        
+        if not HAS_PYVISA and not HAS_MOCK:
             QMessageBox.warning(
                 self,
                 "缺少依赖",
-                "未安装 pyvisa 库！\n\n请运行:\npip install pyvisa pyvisa-py"
+                "未安装 pyvisa 库！\n\n请运行:\npip install pyvisa pyvisa-py\n\n或者使用 Mock 模式测试。"
             )
             self.btn_start.setEnabled(False)
             self.btn_connect.setEnabled(False)
             return
 
         try:
-            self.rm = pyvisa.ResourceManager('@py')
-            self.statusBar().showMessage("VISA 资源管理器已加载")
+            if HAS_PYVISA:
+                self.rm = pyvisa.ResourceManager('@py')
+                self.statusBar().showMessage("VISA 资源管理器已加载 (真实模式)")
+            elif HAS_MOCK:
+                self.rm = MockResourceManager('@py')
+                self.use_mock = True
+                self.statusBar().showMessage("VISA 资源管理器已加载 (模拟模式)")
         except Exception as e:
             QMessageBox.critical(
                 self,
@@ -216,65 +230,107 @@ class PMMonitorMainWindow(QMainWindow):
 
         # 上方：数值显示区 (30%)
         values_group = QGroupBox("测量数据")
-        values_layout = QGridLayout()
+        values_layout = QVBoxLayout()
         values_layout.setSpacing(10)
 
-        # 创建数值标签
-        font_value = QFont("Arial", 24, QFont.Bold)
-        font_label = QFont("Arial", 12)
+        # 创建字体
+        font_large_label = QFont("Arial", 14)
+        font_current = QFont("Arial", 48, QFont.Bold)  # 当前值用大字体
+        font_value = QFont("Arial", 20, QFont.Bold)    # 其他值用中等字体
+        font_small_label = QFont("Arial", 11)
+        font_stat = QFont("Arial", 16, QFont.Bold)
 
-        # 当前值
-        self.lbl_current_label = QLabel("当前值")
+        # ========== 当前值（单独一行，大字体）==========
+        current_frame = QFrame()
+        current_frame.setStyleSheet("background-color: #E8F5E9; border-radius: 8px; padding: 10px;")
+        current_layout = QVBoxLayout(current_frame)
+        current_layout.setSpacing(5)
+
+        self.lbl_current_label = QLabel("当前功率")
+        self.lbl_current_label.setFont(font_large_label)
+        self.lbl_current_label.setStyleSheet("color: #2E7D32;")
+        self.lbl_current_label.setAlignment(Qt.AlignCenter)
+        current_layout.addWidget(self.lbl_current_label)
+
         self.lbl_current_value = QLabel("0.00 W")
-        self.lbl_current_value.setFont(font_value)
-        self.lbl_current_value.setStyleSheet("color: #4CAF50; background-color: #E8F5E9; padding: 5px; border-radius: 3px;")
-        self.lbl_current_label.setFont(font_label)
-        values_layout.addWidget(self.lbl_current_label, 0, 0)
-        values_layout.addWidget(self.lbl_current_value, 0, 1)
+        self.lbl_current_value.setFont(font_current)
+        self.lbl_current_value.setStyleSheet("color: #4CAF50;")
+        self.lbl_current_value.setAlignment(Qt.AlignCenter)
+        current_layout.addWidget(self.lbl_current_value)
+
+        values_layout.addWidget(current_frame)
+
+        # ========== 其他统计值（网格布局）==========
+        stats_layout = QGridLayout()
+        stats_layout.setSpacing(10)
 
         # 最大值
         self.lbl_max_label = QLabel("最大值")
         self.lbl_max_value = QLabel("0.00 W")
         self.lbl_max_value.setFont(font_value)
-        self.lbl_max_value.setStyleSheet("color: #FF9800; background-color: #FFF3E0; padding: 5px; border-radius: 3px;")
-        self.lbl_max_label.setFont(font_label)
-        values_layout.addWidget(self.lbl_max_label, 0, 2)
-        values_layout.addWidget(self.lbl_max_value, 0, 3)
+        self.lbl_max_value.setStyleSheet("color: #FF9800; background-color: #FFF3E0; padding: 8px; border-radius: 5px;")
+        self.lbl_max_value.setAlignment(Qt.AlignCenter)
+        self.lbl_max_label.setFont(font_small_label)
+        self.lbl_max_label.setAlignment(Qt.AlignCenter)
+        stats_layout.addWidget(self.lbl_max_label, 0, 0)
+        stats_layout.addWidget(self.lbl_max_value, 1, 0)
 
         # 最小值
         self.lbl_min_label = QLabel("最小值")
         self.lbl_min_value = QLabel("0.00 W")
         self.lbl_min_value.setFont(font_value)
-        self.lbl_min_value.setStyleSheet("color: #2196F3; background-color: #E3F2FD; padding: 5px; border-radius: 3px;")
-        self.lbl_min_label.setFont(font_label)
-        values_layout.addWidget(self.lbl_min_label, 1, 0)
-        values_layout.addWidget(self.lbl_min_value, 1, 1)
+        self.lbl_min_value.setStyleSheet("color: #2196F3; background-color: #E3F2FD; padding: 8px; border-radius: 5px;")
+        self.lbl_min_value.setAlignment(Qt.AlignCenter)
+        self.lbl_min_label.setFont(font_small_label)
+        self.lbl_min_label.setAlignment(Qt.AlignCenter)
+        stats_layout.addWidget(self.lbl_min_label, 0, 1)
+        stats_layout.addWidget(self.lbl_min_value, 1, 1)
 
         # RMS值
         self.lbl_rms_label = QLabel("RMS值")
         self.lbl_rms_value = QLabel("0.00 W")
         self.lbl_rms_value.setFont(font_value)
-        self.lbl_rms_value.setStyleSheet("color: #9C27B0; background-color: #F3E5F5; padding: 5px; border-radius: 3px;")
-        self.lbl_rms_label.setFont(font_label)
-        values_layout.addWidget(self.lbl_rms_label, 1, 2)
-        values_layout.addWidget(self.lbl_rms_value, 1, 3)
+        self.lbl_rms_value.setStyleSheet("color: #9C27B0; background-color: #F3E5F5; padding: 8px; border-radius: 5px;")
+        self.lbl_rms_value.setAlignment(Qt.AlignCenter)
+        self.lbl_rms_label.setFont(font_small_label)
+        self.lbl_rms_label.setAlignment(Qt.AlignCenter)
+        stats_layout.addWidget(self.lbl_rms_label, 0, 2)
+        stats_layout.addWidget(self.lbl_rms_value, 1, 2)
 
-        # 采样统计
+        values_layout.addLayout(stats_layout)
+
+        # ========== 采样统计（底部）==========
+        time_layout = QHBoxLayout()
+
+        time_frame = QFrame()
+        time_frame.setStyleSheet("background-color: #F5F5F5; border-radius: 5px; padding: 5px;")
+        time_inner = QVBoxLayout(time_frame)
         self.lbl_time_label = QLabel("测量时间")
+        self.lbl_time_label.setFont(font_small_label)
+        self.lbl_time_label.setAlignment(Qt.AlignCenter)
         self.lbl_time_value = QLabel("00:00:00")
-        self.lbl_time_value.setFont(QFont("Arial", 18, QFont.Bold))
+        self.lbl_time_value.setFont(font_stat)
         self.lbl_time_value.setStyleSheet("color: #333;")
-        self.lbl_time_label.setFont(font_label)
-        values_layout.addWidget(self.lbl_time_label, 2, 0)
-        values_layout.addWidget(self.lbl_time_value, 2, 1)
+        self.lbl_time_value.setAlignment(Qt.AlignCenter)
+        time_inner.addWidget(self.lbl_time_label)
+        time_inner.addWidget(self.lbl_time_value)
+        time_layout.addWidget(time_frame)
 
+        count_frame = QFrame()
+        count_frame.setStyleSheet("background-color: #F5F5F5; border-radius: 5px; padding: 5px;")
+        count_inner = QVBoxLayout(count_frame)
         self.lbl_count_label = QLabel("采样次数")
+        self.lbl_count_label.setFont(font_small_label)
+        self.lbl_count_label.setAlignment(Qt.AlignCenter)
         self.lbl_count_value = QLabel("0")
-        self.lbl_count_value.setFont(QFont("Arial", 18, QFont.Bold))
+        self.lbl_count_value.setFont(font_stat)
         self.lbl_count_value.setStyleSheet("color: #333;")
-        self.lbl_count_label.setFont(font_label)
-        values_layout.addWidget(self.lbl_count_label, 2, 2)
-        values_layout.addWidget(self.lbl_count_value, 2, 3)
+        self.lbl_count_value.setAlignment(Qt.AlignCenter)
+        count_inner.addWidget(self.lbl_count_label)
+        count_inner.addWidget(self.lbl_count_value)
+        time_layout.addWidget(count_frame)
+
+        values_layout.addLayout(time_layout)
 
         values_group.setLayout(values_layout)
         layout.addWidget(values_group, 3)
@@ -309,17 +365,29 @@ class PMMonitorMainWindow(QMainWindow):
             devices = self.rm.list_resources()
             self.combo_visa_resources.clear()
 
+            # 始终添加 Mock 设备（用于测试）
+            if "MOCK::PowerMeter::1" not in devices:
+                devices = ["MOCK::PowerMeter::1 (模拟设备 - 无需硬件)"] + list(devices)
+
             if not devices:
                 QMessageBox.information(
                     self,
                     "未发现设备",
-                    "未发现任何 VISA 设备！\n\n请检查：\n1. 设备是否已连接\n2. NI-VISA 驱动是否已安装\n3. NI MAX 中是否能看到设备"
+                    "未发现任何 VISA 设备！\n\n请检查：\n1. 设备是否已连接\n2. NI-VISA 驱动是否已安装\n3. NI MAX 中是否能看到设备\n\n提示：可以使用 MOCK::PowerMeter::1 进行模拟测试"
                 )
                 return
 
             self.combo_visa_resources.addItems(devices)
-            self.combo_visa_resources.setCurrentIndex(0)
-            self.statusBar().showMessage(f"发现 {len(devices)} 个设备")
+            
+            # 默认选择 Mock 设备（方便测试）
+            for i, dev in enumerate(devices):
+                if "MOCK" in dev.upper():
+                    self.combo_visa_resources.setCurrentIndex(i)
+                    break
+            else:
+                self.combo_visa_resources.setCurrentIndex(0)
+                
+            self.statusBar().showMessage(f"发现 {len(devices)} 个设备 (包含模拟设备)")
 
         except Exception as e:
             QMessageBox.critical(
@@ -345,6 +413,21 @@ class PMMonitorMainWindow(QMainWindow):
             self.statusBar().showMessage("正在连接设备...")
             QApplication.processEvents()  # 更新界面
 
+            # 检测是否为 Mock 设备
+            is_mock = "MOCK" in resource_str.upper()
+            
+            if is_mock and HAS_MOCK:
+                from mock_visa import MockResourceManager
+                self.rm = MockResourceManager('@py')
+                self.use_mock = True
+            elif not HAS_PYVISA:
+                QMessageBox.warning(
+                    self,
+                    "缺少依赖",
+                    "未安装 pyvisa！\n请使用 MOCK::PowerMeter 进行模拟测试。"
+                )
+                return
+
             self.instrument = self.rm.open_resource(resource_str, timeout=5000)
 
             # 设置超时和终止符
@@ -359,18 +442,29 @@ class PMMonitorMainWindow(QMainWindow):
             self.btn_connect.setEnabled(False)
             self.btn_connect.setText("已连接")
             self.btn_start.setEnabled(True)
-            self.lbl_connection_status.setText("状态: 已连接")
+            self.lbl_connection_status.setText("状态: 已连接" + (" [模拟]" if is_mock else ""))
             self.lbl_connection_status.setStyleSheet("color: #4CAF50; font-weight: bold;")
 
-            self.statusBar().showMessage("设备已连接")
-
-        except pyvisa.Error as e:
-            error_msg = f"VISA 错误 ({e.abbreviation}): {e.description}"
-            QMessageBox.critical(self, "连接失败", error_msg)
-            self.statusBar().showMessage("连接失败")
+            if is_mock:
+                self.statusBar().showMessage("模拟设备已连接 (生成虚拟数据)")
+                QMessageBox.information(
+                    self,
+                    "模拟模式",
+                    "已连接到模拟设备！\n\n将生成虚拟功率数据用于测试：\n- 基础功率：约 50W\n- 随机噪声、趋势变化、周期性波动"
+                )
+            else:
+                self.statusBar().showMessage("设备已连接")
 
         except Exception as e:
-            QMessageBox.critical(self, "连接失败", f"未知错误:\n{str(e)}")
+            if HAS_PYVISA:
+                import pyvisa
+                if isinstance(e, pyvisa.Error):
+                    error_msg = f"VISA 错误 ({e.abbreviation}): {e.description}"
+                else:
+                    error_msg = f"未知错误:\n{str(e)}"
+            else:
+                error_msg = f"连接失败:\n{str(e)}"
+            QMessageBox.critical(self, "连接失败", error_msg)
             self.statusBar().showMessage("连接失败")
 
     def start_measurement(self):
@@ -493,9 +587,15 @@ class PMMonitorMainWindow(QMainWindow):
             seconds = int(elapsed_time % 60)
             self.lbl_time_value.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
 
-        except pyvisa.Error as e:
-            print(f"VISA 读取错误: {e}")
-            self.statusBar().showMessage(f"读取错误: {e.abbreviation}")
+        except Exception as e:
+            # 处理 VISA 错误（如果安装了 pyvisa）
+            if HAS_PYVISA:
+                import pyvisa
+                if isinstance(e, pyvisa.Error):
+                    print(f"VISA 读取错误: {e}")
+                    self.statusBar().showMessage(f"读取错误: {e.abbreviation}")
+                    return
+            # 重新抛出其他异常
 
         except ValueError as e:
             print(f"数据解析错误: {e}")
