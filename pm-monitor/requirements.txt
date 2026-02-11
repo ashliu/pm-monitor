@@ -1,0 +1,15 @@
+# PM-Monitor 项目依赖
+# Python 3.7+
+
+# PyQt5 - GUI 框架
+PyQt5>=5.15.0
+
+# pyqtgraph - 高性能绘图
+pyqtgraph>=0.12.0
+
+# pyvisa - NI-VISA 仪器通信
+pyvisa>=1.13.0
+pyvisa-py>=0.5.3
+
+# numpy - 数值计算
+numpy>=1.20.0
