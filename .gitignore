@@ -12,3 +12,5 @@ memory/
 # Sensitive data
 .gitea_env
 *.env
+# Brave Search API Key
+.brave_key
