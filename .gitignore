@@ -8,3 +8,7 @@ SOUL.md
 TOOLS.md
 USER.md
 memory/
+
+# Sensitive data
+.gitea_env
+*.env

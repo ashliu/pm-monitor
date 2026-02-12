@@ -1,0 +1,9 @@
+# Gitea API Configuration
+# Auto-generated on 2026-02-11
+# Keep this file secure - contains API token!
+
+GITEA_URL=http://100.77.21.20:39317
+GITEA_API_TOKEN=7d9aa283bcaf1419a35796629cf6f5a1f488e0cb
+
+# Usage examples:
+# curl -H "Authorization: token $GITEA_API_TOKEN" "$GITEA_URL/api/v1/user"
